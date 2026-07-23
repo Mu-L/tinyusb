@@ -38,7 +38,7 @@ PID = '4010'
 GZ_REF = '0525 a4a0'  # copy Gadget Zero's capability profile (ctrl_out+iso+intr)
 SYS_USB = Path('/sys/bus/usb/devices')
 DRIVER = Path('/sys/bus/usb/drivers/usbtest')
-USB_RECOVER = Path(__file__).resolve().parents[2] / '.claude/skills/usb-recover/scripts/usb_recover.sh'
+USB_RECOVER = Path(__file__).resolve().parents[2] / '.claude/skills/usb-kernel-recover/scripts/usb_recover.sh'
 PATTERN_PARAM = Path('/sys/module/usbtest/parameters/pattern')
 
 # Battery per tier, in run order: control sanity first, then simple bulk,
@@ -391,7 +391,7 @@ def main():
                 if pci:
                     print(f'aborting battery: kernel-side hang, device wedged mid-transfer.\n'
                           f'auto-recovering: sudo {USB_RECOVER} pci-reset {pci} '
-                          f'(see .claude/skills/usb-recover)', file=sys.stderr)
+                          f'(see .claude/skills/usb-kernel-recover)', file=sys.stderr)
                     # FLR frees the D-state ioctl without the device lock; must run BEFORE
                     # any unbind/remove_id, which would deadlock the bus otherwise
                     if sudo([str(USB_RECOVER), 'pci-reset', pci]).returncode != 0:
@@ -418,7 +418,7 @@ def main():
         try:
             if unrecovered_hang:
                 # testusb is still stuck in a usbfs ioctl holding the device lock; remove_id/unbind
-                # would join the convoy and deadlock the bus (see usb-recover skill) — leave it be
+                # would join the convoy and deadlock the bus (see usb-kernel-recover skill) — leave it be
                 print('skipping cleanup after unrecovered hang: reboot required to release the bus',
                       file=sys.stderr)
             elif not args.keep_binding:

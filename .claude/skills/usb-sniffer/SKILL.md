@@ -1,6 +1,6 @@
 ---
 name: usb-sniffer
-description: Use when you need wire-level USB evidence that host-side capture can't provide — a device that never enumerates (usbmon shows nothing or only Submits), suspected NAK storms/STALL/babble/bad handshakes, bus-reset or enumeration timing, split-transaction issues, or a usbmon-vs-device-log disagreement the wire must arbitrate. Captures LS/FS/HS packets (PIDs, tokens, handshakes, SE0/line states) with the ataradov usb-sniffer hardware into Wireshark pcapng.
+description: Use when you need wire-level USB evidence that host-side capture can't provide — a device that never enumerates (usbmon shows nothing or only Submits), suspected NAK storms/STALL/babble/bad handshakes, bus-reset or enumeration timing, split-transaction issues, a usbmon-vs-device-log disagreement the wire must arbitrate, or any link where TinyUSB is the host (no Linux PC host to run usbmon on). Captures LS/FS/HS packets (PIDs, tokens, handshakes, SE0/line states) with the ataradov usb-sniffer hardware into Wireshark pcapng.
 ---
 
 # usb-sniffer — wire-level capture with the ataradov hardware analyzer
@@ -9,14 +9,16 @@ Extends the debugging trio with the layer below URBs:
 
 | Skill | Answers |
 |---|---|
-| `usbmon` | what the host software exchanged (URBs) |
-| `usb-debug` | why the host acted (dmesg / dynamic debug) |
-| `usb-target-debug` | what the device firmware did |
+| `usbmon` | what a Linux PC host exchanged (URBs) |
+| `usb-kernel-debug` | why the Linux kernel acted (dmesg / dynamic debug) |
+| `target-debug` | what the TinyUSB target did (device or host role) |
 | **`usb-sniffer`** | **what actually crossed D+/D-** (PIDs, handshakes, resets, timing) |
 
 Reach for it when usbmon can't see (device never binds, pre-enumeration
-failures) or can't be trusted (URB completed but did the wire really ACK?).
-For everything visible in URBs, usbmon is cheaper — no hardware, no locks.
+failures), can't be trusted (URB completed but did the wire really ACK?), or
+doesn't exist — a link where TinyUSB is the host has no usbmon on either end
+(an MCU host runs no kernel; a Linux gadget peer's UDC bypasses usbmon).
+Where a Linux PC is the host, usbmon is cheaper — no hardware, no locks.
 
 ## Rig inventory — find the sniffer and what it taps
 

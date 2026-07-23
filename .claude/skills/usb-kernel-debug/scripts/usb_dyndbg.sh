@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# usb_dyndbg.sh — toggle kernel dynamic-debug on USB host drivers; run with sudo.
-# Flips +p/-p only on an allowlisted set of USB modules, so it can't reach
-# arbitrary kernel debug or unrelated subsystems.
+# usb_dyndbg.sh — toggle kernel dynamic-debug on USB drivers (host or gadget
+# side); run with sudo. Flips +p/-p only on an allowlisted set of USB modules,
+# so it can't reach arbitrary kernel debug or unrelated subsystems.
 #
 # Usage:
 #   sudo usb_dyndbg.sh on  <module>...   # enable  +p  (e.g. usbcore xhci_hcd)
@@ -10,8 +10,9 @@
 set -euo pipefail
 
 CTL=/sys/kernel/debug/dynamic_debug/control
-# Allowlist: USB host-controller + core + common host class drivers.
-ALLOW='usbcore xhci_hcd xhci_pci xhci_pci_renesas ehci_hcd ehci_pci ohci_hcd ohci_pci uhci_hcd dwc2 cdc_acm usb_storage uas'
+# Allowlist: USB core + host-controller + common class drivers, plus the
+# gadget/UDC side of a Linux peer (dwc2/dwc3, udc_core, libcomposite).
+ALLOW='usbcore xhci_hcd xhci_pci xhci_pci_renesas ehci_hcd ehci_pci ohci_hcd ohci_pci uhci_hcd dwc2 dwc3 cdc_acm usb_storage uas libcomposite udc_core'
 
 die() { echo "usb_dyndbg: $*" >&2; exit 1; }
 usage() {

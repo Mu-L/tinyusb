@@ -116,7 +116,7 @@ Cutting a release — version bump, regenerated files, the per-release changelog
 
 ## References
 
-- MCU reference manuals, datasheets, schematics: before answering register/bitfield/pinout/errata/timing questions from memory or the web, use the `read-doc` skill (`.claude/skills/read-doc/SKILL.md`) to search and read them from `$HOME/Documents/calibre-library` (skill no-ops if the library is absent).
+- MCU reference manuals, datasheets, schematics: before answering register/bitfield/pinout/errata/timing questions from memory or the web — or changing a specific dcd/hcd driver — use the `read-doc` skill (`.claude/skills/read-doc/SKILL.md`) to cross-check against docs in `$HOME/Documents/calibre-library`; tell the user if the needed document is missing (skill no-ops if the library is absent).
 - Supported MCUs/boards: `hw/bsp/` and `docs/reference/boards.rst`.
 - USB classes: `src/class/{cdc,hid,msc,audio,…}/` — each has `*_device.c` and `*_host.c`.
 - Key files: `src/tusb.h`, `src/tusb_config.h`, `tools/get_deps.py`, `tools/build.py`, `test/unit-test/project.yml`.

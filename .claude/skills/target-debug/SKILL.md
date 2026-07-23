@@ -1,23 +1,28 @@
 ---
-name: usb-target-debug
-description: Use when a TinyUSB device misbehaves on real hardware and host-side capture can't explain it — a HIL test fails but usbmon shows only Submits with no Completes, the device silently NAKs, wedges, STALLs, babbles, or drops data, EP0 starves, an ISR or DCD/HCD state bug is suspected — and you need device-side evidence: TU_LOG/RTT logs, GDB state dumps, a RAM ring-buffer event trace, or PC-sampling of where the core spins.
+name: target-debug
+description: Use when TinyUSB firmware — device or host stack — misbehaves on real hardware and capture from the other end can't explain it: a HIL test fails but usbmon shows only Submits with no Completes, the device silently NAKs, wedges, STALLs, babbles, or drops data, EP0 starves, tuh_ enumeration of an attached device fails, an ISR or DCD/HCD state bug is suspected — and you need target-side evidence: TU_LOG/RTT logs, GDB state dumps, a RAM ring-buffer event trace, or PC-sampling of where the core spins.
 ---
 
-# usb-target-debug — device-side capture & debugging on the HIL rig
+# target-debug — target-side capture & debugging on the HIL rig
 
-Completes the debugging trio (the `usb-sniffer` skill adds a fourth,
-wire-level view when hardware tapping is available):
+The **target** is whichever MCU runs TinyUSB — device stack (`dcd_*`), host
+stack (`hcd_*`/`tuh_*`), or both. Its link peer is not always a Linux PC: a
+TinyUSB host may face another TinyUSB board or a Linux gadget (e.g. a
+Raspberry Pi). Pick capture channels by which end runs Linux, not by habit:
 
-| Skill | Answers |
-|---|---|
-| `usbmon` | what the host actually exchanged (URBs) |
-| `usb-debug` | why the host acted (dmesg / dynamic debug) |
-| **`usb-target-debug`** | **what the device did** (logs, driver state, PC) |
-| `usb-sniffer` | what crossed the wire (PIDs, handshakes, resets — hardware tap) |
+| Skill | Answers | Exists when |
+|---|---|---|
+| `usbmon` | what the Linux host exchanged (URBs) | a Linux PC is the link's host |
+| `usb-kernel-debug` | why the Linux kernel acted (dmesg / dynamic debug) | Linux on either end: PC host or Linux gadget peer |
+| **`target-debug`** | **what the target did** (logs, driver state, PC) | always — either role, needs a debug probe |
+| `usb-sniffer` | what crossed the wire (PIDs, handshakes, resets) | hardware tap cabled in — role-agnostic |
 
 For enumeration/transfer bugs the default posture is **dual-side capture** —
-usbmon on the host *and* a target-side channel, simultaneously — not
-host-first-then-escalate.
+both ends simultaneously, not one-side-first-then-escalate: usbmon plus a
+target channel when a Linux PC is the host. When TinyUSB is the host there is
+no usbmon on either end — pair the target channel with the wire
+(`usb-sniffer`) and, if the peer is a Linux gadget, `usb-kernel-debug` on the
+peer.
 
 ## Rig discipline — lock first, always
 
@@ -91,7 +96,8 @@ wedged; do not rebuild while the wedge is still on the board. The debug-loop
 specifics:
 
 ```gdb
-p/x _usbd_dev.ep_status          # usbd core [epnum][dir] (1=IN): busy/stalled/claimed
+p/x _usbd_dev.ep_status          # device stack: usbd [epnum][dir] (1=IN): busy/stalled/claimed
+p _usbh_devices[0]               # host stack: usbh per-device state (addr, enum/config)
 p/x <port's private state>       # per-port names — read the board's dcd_*.c first
 x/32wx <USB peripheral base>     # raw EP/FIFO regs; base = the macro the dcd uses
 watch  xfer_status[2][1].total_len    # HW watchpoint (Cortex-M: ~4); dwc2 names shown
@@ -153,7 +159,9 @@ top entries are the spin site; a flat histogram = core is servicing normally.
 
 ## Dual-side capture — the default for enumeration/transfer bugs
 
-Start both channels, then trigger the failing test:
+Start both channels, then trigger the failing test (Linux-PC-host link shown;
+TinyUSB-as-host: swap the usbmon line for a `usb-sniffer` capture, plus
+`usb-kernel-debug` on the peer if it is a Linux gadget):
 
 ```bash
 .claude/skills/usbmon/scripts/usbcap.sh cafe: 30 /tmp/host.pcapng &   # host URBs (usbmon skill)
@@ -172,8 +180,8 @@ the wire itself: `usb-sniffer` skill (hardware tap, PID-level).
 
 - **Halting/resetting via the probe does NOT disconnect the device**: a DWC2
   soft-connect pullup stays up through core halt *and* reset, so the host's
-  stuck URBs stay stuck and a wedged DUT stays wedged — recover the host side
-  with the `usb-recover` skill.
+  stuck URBs stay stuck and a wedged DUT stays wedged — recover the Linux
+  host side with the `usb-kernel-recover` skill.
 - **A bug that vanishes under LOG=2 is a timing bug**, not fixed: switch to
   the ring buffer; if it vanishes under GDB too, PC-sampling only.
 - **UART TU_LOG blocks in the write path** (worst perturbation, including

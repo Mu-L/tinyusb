@@ -1,6 +1,6 @@
 ---
 name: usbtest
-description: Use when running, debugging, or porting the Linux usbtest/testusb battery (examples/device/usbtest, cafe:4010) — device "did not bind", SET_CONFIGURATION fails, a case fails with errno 110/32/5/71, toggle-clear/halt/unlink/iso failures, iso packets dropped, or a new MCU/DCD needs the full 30/30 sign-off.
+description: Use when running, debugging, or porting the Linux usbtest/testusb battery (examples/device/usbtest, cafe:4010) — device "did not bind", SET_CONFIGURATION fails, a case fails with errno 110/32/5/71, toggle-clear/halt/unlink/iso failures, iso packets dropped, or a new MCU/DCD needs the full 30/30 sign-off. Needs a Linux PC as the link's host driving TinyUSB in device role — it exercises the DCD, not the TinyUSB host stack.
 ---
 
 # usbtest — porting & debugging the Linux kernel USB battery

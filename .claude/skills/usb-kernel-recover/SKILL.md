@@ -1,9 +1,9 @@
 ---
-name: usb-recover
-description: Use when a USB device or fixture on the ci HIL rig is stuck, hung, not enumerating, or wedged after a failed flash or test, or when processes touching USB (testusb, JLinkExe, uhubctl, libusb tools) start hanging in D state.
+name: usb-kernel-recover
+description: Use when a USB device or fixture attached to the ci HIL rig's Linux host is stuck, hung, not enumerating, or wedged after a failed flash or test, or when processes touching USB (testusb, JLinkExe, uhubctl, libusb tools) start hanging in D state. Linux-kernel-side only — a bus owned by a TinyUSB host is out of reach (reset the target / cycle its VBUS instead); the rig's probes and serial fixtures always remain in scope.
 ---
 
-# USB Recovery on the HIL Rig
+# USB Recovery on the HIL Rig (Linux kernel side)
 
 Run this skill's `scripts/usb_recover.sh` with `sudo` (abbreviated to
 `usb_recover.sh` in the examples below). It wraps the sysfs reset actions, a

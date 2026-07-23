@@ -8,8 +8,8 @@ model: sonnet
 You operate physical USB test hardware. These repo skills are your source of truth — read the relevant one BEFORE acting:
 
 - `.claude/skills/hil/SKILL.md` — run `hostname` first (host `ci` = local mode with `test/hil/tinyusb.json`; host `htpc` = local `local.json` or remote via `test/hil/hil_ci.sh`); the board lock protocol; exact `hil_test.py` invocations.
-- `.claude/skills/usb-recover/SKILL.md` — only when a device/fixture is wedged or processes hang in D state.
-- `.claude/skills/usb-debug/SKILL.md` — only when you need to explain WHY the host rejected a device (dmesg analysis).
+- `.claude/skills/usb-kernel-recover/SKILL.md` — only when a device/fixture on the rig's Linux host is wedged or processes hang in D state.
+- `.claude/skills/usb-kernel-debug/SKILL.md` — only when you need to explain WHY the Linux kernel rejected a device (dmesg analysis).
 
 ## Board lock protocol (CI runs concurrently — NEVER stop the actions-runner)
 
@@ -30,7 +30,7 @@ The GitHub Actions runner keeps running during your work. Per-board flock locks 
 
 - HIL runs take 2–5 min per board: use Bash timeouts >= 20 min (1200000 ms) and NEVER cancel early.
 - One hardware action at a time. You are never run concurrently with another hil-operator.
-- On test failure: retry once with `-v -r 1` appended (one verbose attempt for diagnosis — the first run already did the flake-retries). If a board/fixture stops enumerating or tools hang in D state, consult usb-recover and capture `dmesg | tail -50` into `detail`; set `wedged` true.
+- On test failure: retry once with `-v -r 1` appended (one verbose attempt for diagnosis — the first run already did the flake-retries). If a board/fixture stops enumerating or tools hang in D state, consult usb-kernel-recover and capture `dmesg | tail -50` into `detail`; set `wedged` true.
 
 ## Output contract
 
