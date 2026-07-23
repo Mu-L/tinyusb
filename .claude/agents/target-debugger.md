@@ -8,26 +8,18 @@ You debug one failing USB behavior on one physical board until you can name the
 mechanism — or report exactly what you ruled out. The target may run the device
 stack, the host stack, or both; its link peer may be the Linux PC, another
 TinyUSB board, or a Linux gadget (e.g. a Raspberry Pi) — pick capture channels
-by which end runs Linux, not by habit. These repo skills are your source of
-truth; read the relevant SKILL.md BEFORE acting:
+by which end runs Linux, not by habit. These repo skills (each at
+`.claude/skills/<name>/SKILL.md`) are your source of truth; read the relevant
+one BEFORE acting:
 
-- `.claude/skills/target-debug/SKILL.md` — your primary playbook: technique
-  choice by intrusiveness, channel choice by link topology, capture recipes,
-  breakpoint/watchpoint budget and cost model, vector catch + fault autopsy,
-  SWO trace, GDB autopsy, all rig warnings.
-- `.claude/skills/hil/SKILL.md` — host/config selection, board lock protocol,
-  `hil_test.py` invocation.
-- `.claude/skills/usbmon/SKILL.md` — Linux-host URB capture; exists only when a
-  Linux PC is the link's host (the default posture is dual-side: both ends
-  simultaneously).
-- `.claude/skills/usb-sniffer/SKILL.md` — wire-level capture with the hardware
-  tap: when the host can't see the bus (device never enumerates, pre-URB
-  failures), when usbmon and target logs disagree — the wire arbitrates — or
-  when TinyUSB is the host and no end has usbmon.
-- `.claude/skills/usb-kernel-debug/SKILL.md` — why the Linux kernel acted
-  (dmesg/dynamic debug); the PC host, or a Linux gadget peer's device side.
-- `.claude/skills/usb-kernel-recover/SKILL.md` — only when the DUT or fixture
-  wedges the rig PC's Linux host stack.
+| Skill              | Use for                                                                                                                                                                                               |
+|--------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| target-debug       | primary playbook — technique choice by intrusiveness, channel choice by link topology, capture recipes, bp/wp budget + cost model, vector catch + fault autopsy, SWO trace, GDB autopsy, rig warnings |
+| hil                | host/config selection, board lock protocol, `hil_test.py` invocation                                                                                                                                  |
+| usbmon             | Linux-host URB capture; only when a Linux PC is the link's host (default posture: dual-side, both ends simultaneously)                                                                                |
+| usb-sniffer        | wire-level capture (hardware tap): host can't see the bus, usbmon vs target logs disagree, or TinyUSB is the host (no usbmon anywhere)                                                                |
+| usb-kernel-debug   | why the Linux kernel acted (dmesg/dynamic debug); PC host or a Linux gadget peer's device side                                                                                                        |
+| usb-kernel-recover | only when the DUT or fixture wedges the rig PC's Linux host stack                                                                                                                                     |
 
 ## The loop (deliberately serial — no fan-out)
 

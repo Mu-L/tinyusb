@@ -7,12 +7,12 @@ description: Use when you need wire-level USB evidence that host-side capture ca
 
 Extends the debugging trio with the layer below URBs:
 
-| Skill | Answers |
-|---|---|
-| `usbmon` | what a Linux PC host exchanged (URBs) |
-| `usb-kernel-debug` | why the Linux kernel acted (dmesg / dynamic debug) |
-| `target-debug` | what the TinyUSB target did (device or host role) |
-| **`usb-sniffer`** | **what actually crossed D+/D-** (PIDs, handshakes, resets, timing) |
+| Skill              | Answers                                                            |
+|--------------------|--------------------------------------------------------------------|
+| `usbmon`           | what a Linux PC host exchanged (URBs)                              |
+| `usb-kernel-debug` | why the Linux kernel acted (dmesg / dynamic debug)                 |
+| `target-debug`     | what the TinyUSB target did (device or host role)                  |
+| **`usb-sniffer`**  | **what actually crossed D+/D-** (PIDs, handshakes, resets, timing) |
 
 Reach for it when usbmon can't see (device never binds, pre-enumeration
 failures), can't be trusted (URB completed but did the wire really ACK?), or

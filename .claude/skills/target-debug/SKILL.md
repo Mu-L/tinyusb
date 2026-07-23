@@ -10,12 +10,12 @@ stack (`hcd_*`/`tuh_*`), or both. Its link peer is not always a Linux PC: a
 TinyUSB host may face another TinyUSB board or a Linux gadget (e.g. a
 Raspberry Pi). Pick capture channels by which end runs Linux, not by habit:
 
-| Skill | Answers | Exists when |
-|---|---|---|
-| `usbmon` | what the Linux host exchanged (URBs) | a Linux PC is the link's host |
+| Skill              | Answers                                            | Exists when                                       |
+|--------------------|----------------------------------------------------|---------------------------------------------------|
+| `usbmon`           | what the Linux host exchanged (URBs)               | a Linux PC is the link's host                     |
 | `usb-kernel-debug` | why the Linux kernel acted (dmesg / dynamic debug) | Linux on either end: PC host or Linux gadget peer |
-| **`target-debug`** | **what the target did** (logs, driver state, PC) | always — either role, needs a debug probe |
-| `usb-sniffer` | what crossed the wire (PIDs, handshakes, resets) | hardware tap cabled in — role-agnostic |
+| **`target-debug`** | **what the target did** (logs, driver state, PC)   | always — either role, needs a debug probe         |
+| `usb-sniffer`      | what crossed the wire (PIDs, handshakes, resets)   | hardware tap cabled in — role-agnostic            |
 
 For enumeration/transfer bugs the default posture is **dual-side capture** —
 both ends simultaneously: usbmon + a target
@@ -35,12 +35,15 @@ python3 test/hil/board_lock.py release <board>
 ```
 
 Board → probe mapping: `test/hil/tinyusb.json` — `flasher.name` is the probe
-family, `flasher.uid` the **probe serial** (many identical probes on the rig:
-J-Link needs `-SelectEmuBySN <uid>` / GDB server `-select usb=<uid>`; OpenOCD
-`-c 'adapter serial <uid>'`). `JLINK_DEVICE` / `OPENOCD_OPTION` come from
-`hw/bsp/<family>/boards/<board>/board.cmake` (or `board.mk`); find the family
-with `ls -d hw/bsp/*/boards/<board>`. Run on the host that owns the probe —
-config is `test/hil/tinyusb.json` on ci, `local.json` on htpc (`hil` skill).
+family, `flasher.uid` the **probe serial** (many identical probes on the rig):
+
+- Select the probe by serial: J-Link `-SelectEmuBySN <uid>`, its GDB server
+  `-select usb=<uid>`, OpenOCD `-c 'adapter serial <uid>'`.
+- `JLINK_DEVICE` / `OPENOCD_OPTION`: from
+  `hw/bsp/<family>/boards/<board>/board.cmake` (or `board.mk`); family via
+  `ls -d hw/bsp/*/boards/<board>`.
+- Run on the host that owns the probe — config `test/hil/tinyusb.json` on ci,
+  `local.json` on htpc (`hil` skill).
 
 ## Pick the least intrusive technique that can answer the question
 
@@ -48,16 +51,16 @@ Observation can mask the bug — the ch32v307 Heisenbug changed behavior under
 logging *and* under the debugger. If the bug disappears when instrumented,
 that IS a finding (timing-sensitive): move down in intrusiveness, not up.
 
-| Technique | Intrusiveness | Reach for it when |
-|---|---|---|
-| PC-sampling | none — no halt, no code change | core wedged/spinning somewhere unknown (rusb2 FRDY) |
-| SWO exception trace / hw PC-sample | none — needs SWO pin wired | ISR ordering/timing with zero code change |
-| Vector catch | none until a fault fires | crash-shaped wedges — autopsy AT the faulting pc |
-| RAM ring-buffer | ~tens of cycles per event | ISR ordering/timing bugs (musb babble) |
-| TU_LOG (RTT) | µs per line | logic bugs that survive logging (J-Link or OpenOCD rtt) |
-| TU_LOG (UART) | ms per line — blocking write | same, when no debug-probe RTT path |
-| dprintf / conditional breakpoint | halt+resume per hit (~ms) | low-rate probes post-wedge; never ISR-rate events |
-| GDB halt / breakpoints | stops USB service entirely | post-mortem state autopsy once wedged |
+| Technique                          | Intrusiveness                  | Reach for it when                                       |
+|------------------------------------|--------------------------------|---------------------------------------------------------|
+| PC-sampling                        | none — no halt, no code change | core wedged/spinning somewhere unknown (rusb2 FRDY)     |
+| SWO exception trace / hw PC-sample | none — needs SWO pin wired     | ISR ordering/timing with zero code change               |
+| Vector catch                       | none until a fault fires       | crash-shaped wedges — autopsy AT the faulting pc        |
+| RAM ring-buffer                    | ~tens of cycles per event      | ISR ordering/timing bugs (musb babble)                  |
+| TU_LOG (RTT)                       | µs per line                    | logic bugs that survive logging (J-Link or OpenOCD rtt) |
+| TU_LOG (UART)                      | ms per line — blocking write   | same, when no debug-probe RTT path                      |
+| dprintf / conditional breakpoint   | halt+resume per hit (~ms)      | low-rate probes post-wedge; never ISR-rate events       |
+| GDB halt / breakpoints             | stops USB service entirely     | post-mortem state autopsy once wedged                   |
 
 ## TU_LOG capture
 
@@ -293,7 +296,7 @@ the wire itself: `usb-sniffer` skill (hardware tap, PID-level).
 - J-Link (UM08001): <https://kb.segger.com/UM08001_J-Link_/_J-Trace_User_Guide> — flash breakpoints, RTT, SWO, monitor mode, Commander.
 - OpenOCD: <https://openocd.org/doc/html/index.html> — `rtt`, `bp`/`wp`, `cortex_m vector_catch`/`maskisr`, `itm`/`tpiu`.
 - "Debugging with GDB" (§5.1 = break/watch/dprintf): Tenth Edition (GDB 18)
-  via calibre/`read-doc` — NOT the 2002 Ninth-Edition txt also there — or
+  via calibre/`read-doc`, or
   `curl -sL -o /tmp/gdb.pdf https://sourceware.org/gdb/current/onlinedocs/gdb.pdf`
   (the HTML mirror blocks fetchers). Installed `arm-none-eabi-gdb`
   `help <cmd>` is authoritative here.

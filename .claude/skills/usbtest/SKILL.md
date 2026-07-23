@@ -80,12 +80,12 @@ python3 test/hil/usbtest.py --serial <uid> --keep-binding --tests 29 # one case
 
 ## Debug ladder (escalate in order)
 
-| errno | Meaning |
-|---|---|
-| 110 | timeout — endpoint NAKing forever / device wedged |
-| 32 | EPIPE — unexpected STALL |
-| 5 | EIO — iso packet errors (check `dmesg`: "N errors out of M") |
-| 71 | EPROTO — device answered wrong / too slow (after HC retries) |
+| errno | Meaning                                                      |
+|-------|--------------------------------------------------------------|
+| 110   | timeout — endpoint NAKing forever / device wedged            |
+| 32    | EPIPE — unexpected STALL                                     |
+| 5     | EIO — iso packet errors (check `dmesg`: "N errors out of M") |
+| 71    | EPROTO — device answered wrong / too slow (after HC retries) |
 
 1. `usbtest.py` per-case output + its captured `dmesg` (`TEST n` markers bracket each case).
 2. **usbmon** (`usbmon` skill): URB-level ground truth. **It cannot show data toggles or NAKs** —

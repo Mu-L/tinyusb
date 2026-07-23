@@ -29,18 +29,18 @@ tshark -r cap.pcapng -Y 'usb.device_address==26'   # filter to one device
 
 ## Filter (`-Y '<expr>'`)
 
-| Goal | Expression |
-|---|---|
-| One device / endpoint | `usb.device_address==26` / `usb.endpoint_address==0x81` |
-| IN (to host) / OUT (from host) | `usb.endpoint_address.direction==1` / `==0` |
-| Submit / Complete event | `usb.urb_type=='S'` / `=='C'` (char literal: single quotes) |
-| Control / bulk / interrupt / iso | `usb.transfer_type==2` / `3` / `1` / `0` |
-| Only transfers carrying data | `usb.data_len>0` |
-| GET_DESCRIPTOR / SET_ADDRESS / SET_CONFIGURATION | `usb.setup.bRequest==6` / `5` / `9` |
-| SET_INTERFACE / CLEAR_FEATURE (clear-halt) | `usb.setup.bRequest==11` / `1` |
-| Descriptor type DEVICE/CONFIG/STRING/HID-report | `usb.bDescriptorType==1` / `2` / `3` / `0x22` |
-| Class / vendor requests | `usb.bmRequestType.type!=0` |
-| STALLs / errors | `usb.urb_status!=0 && usb.urb_status!=-115` |
+| Goal                                             | Expression                                                  |
+|--------------------------------------------------|-------------------------------------------------------------|
+| One device / endpoint                            | `usb.device_address==26` / `usb.endpoint_address==0x81`     |
+| IN (to host) / OUT (from host)                   | `usb.endpoint_address.direction==1` / `==0`                 |
+| Submit / Complete event                          | `usb.urb_type=='S'` / `=='C'` (char literal: single quotes) |
+| Control / bulk / interrupt / iso                 | `usb.transfer_type==2` / `3` / `1` / `0`                    |
+| Only transfers carrying data                     | `usb.data_len>0`                                            |
+| GET_DESCRIPTOR / SET_ADDRESS / SET_CONFIGURATION | `usb.setup.bRequest==6` / `5` / `9`                         |
+| SET_INTERFACE / CLEAR_FEATURE (clear-halt)       | `usb.setup.bRequest==11` / `1`                              |
+| Descriptor type DEVICE/CONFIG/STRING/HID-report  | `usb.bDescriptorType==1` / `2` / `3` / `0x22`               |
+| Class / vendor requests                          | `usb.bmRequestType.type!=0`                                 |
+| STALLs / errors                                  | `usb.urb_status!=0 && usb.urb_status!=-115`                 |
 
 Combine with `&&` — e.g. one endpoint's data: `usb.endpoint_address==0x02 && usb.data_len>0`.
 
