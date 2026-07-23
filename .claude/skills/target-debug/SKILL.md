@@ -55,12 +55,159 @@ that IS a finding (timing-sensitive): move down in intrusiveness, not up.
 |------------------------------------|--------------------------------|---------------------------------------------------------|
 | PC-sampling                        | none — no halt, no code change | core wedged/spinning somewhere unknown (rusb2 FRDY)     |
 | SWO exception trace / hw PC-sample | none — needs SWO pin wired     | ISR ordering/timing with zero code change               |
+| DWT data trace                     | none — needs SWO pin wired     | stream one address's accesses: value + accessor PC      |
 | Vector catch                       | none until a fault fires       | crash-shaped wedges — autopsy AT the faulting pc        |
 | RAM ring-buffer                    | ~tens of cycles per event      | ISR ordering/timing bugs (musb babble)                  |
 | TU_LOG (RTT)                       | µs per line                    | logic bugs that survive logging (J-Link or OpenOCD rtt) |
 | TU_LOG (UART)                      | ms per line — blocking write   | same, when no debug-probe RTT path                      |
 | dprintf / conditional breakpoint   | halt+resume per hit (~ms)      | low-rate probes post-wedge; never ISR-rate events       |
 | GDB halt / breakpoints             | stops USB service entirely     | post-mortem state autopsy once wedged                   |
+
+## PC-sampling, SWO trace & DWT data trace — watch without halting
+
+`DWT_PCSR` (0xE000101C) returns the current PC on every read, target running
+(Cortex-M3+; optional on M0+, reads 0 if absent; 0xFFFFFFFF = core halted or
+WFI-asleep — `mem32 E000EDF0, 1`, DHCSR bit 17 S_HALT, tells which). One
+probe serves one client: quit JLinkExe before starting JLinkGDBServer on the
+same probe. Nailed the rusb2 FRDY wedge:
+
+```bash
+for i in $(seq 300); do echo 'mem32 E000101C, 1'; done \
+  | JLinkExe -device $JLINK_DEVICE -SelectEmuBySN <uid> -if swd -speed 4000 -autoconnect 1 -nogui 1 \
+  | awk '/E000101C = /{print $3}' | sort | uniq -c | sort -rn | head
+arm-none-eabi-addr2line -e <firmware.elf> -f -a 0x<hot-pc> ...   # PCs → functions
+```
+
+OpenOCD variant: repeat `mdw 0xE000101C` over telnet :4444. The histogram's
+top entries are the spin site; a flat histogram = core is servicing normally.
+
+### SWO — hardware-timed trace on one pin (J-Link; verified on F407)
+
+If SWO (TRACESWO) is wired, DWT emits packets with ZERO code change:
+**exception trace** (DWT_CTRL bit16 — every IRQ enter/exit, timestamped) and
+**hardware PC sampling** (bit12), better histograms than DWT_PCSR polling.
+SWOViewer tools decode only ITM *stimulus* (TinyUSB emits none) — capture
+raw:
+
+```bash
+# JLinkExe -CommandFile:
+w4 E0001000, 0x00011401      # EXCTRCENA|PCSAMPLENA|SYNCTAP|CYCCNTENA
+SWOStart 4000000             # explicit speed — autodetect fails headless
+Sleep 3000
+SWORead                      # hex: 0x17+4B LE = PC sample, 0x0E+2B = IRQ enter/exit
+```
+
+Verified: 680 KB in 3 s (flash-range PC samples + SysTick enter/exit).
+SWORead stuck at 0 = SWO pin not wired (many boards route only SWDIO/SWCLK).
+Restore DWT_CTRL when done.
+
+### DWT data trace — stream one variable's accesses (value + PC), zero code
+
+The watchpoint comparators' non-halting sibling (ARMv7-M ARM Table C1-21;
+absent on ARMv6-M): emit a packet on every access to a watched address
+instead of halting. Verified on F407 (J-Link) and H743 (OpenOCD/ST-Link) —
+both streamed `system_ticks`' live value plus the accessor PC
+(`tusb_time_millis_api`):
+
+```bash
+w4 E0001020, <&variable>   # DWT_COMP0 (JLinkExe shown; OpenOCD: same via mww)
+w4 E0001024, 0             # DWT_MASK0 = exact address
+w4 E0001028, 0x3           # FUNCTION 0b0011: value + accessor-PC packets (0b0010: value only)
+# stream: 0x47+4B = accessor PC, 0x87+4B = value, 0x70 = timestamp
+```
+
+Caveats: traces reads AND writes (no write-only encoding) — a variable the
+main loop polls floods the pipe with read packets and squeezes out value
+packets (seen on F407); disarm (`FUNCTION=0`) when done; costs one of the
+DWT comparators.
+
+### Enabling SWO — the chain, and the vendor part that bites
+
+DEMCR.TRCENA → ITM (TCR/TER) → SWO/TPIU (protocol + prescaler) → pin mux.
+Tools set the first three (`SWOStart` on SEGGER; `swo`/`tpiu` object
+`enable` + `itm ports on` on OpenOCD) — pin mux and trace clocks are
+per-family:
+
+- STM32F4: debug pins default to trace — nothing to configure.
+- STM32H7 (verified, ST-Link): DBGMCU trace clocks + **PB3 muxed to AF0 by
+  hand** + native `stlink-dap.cfg` (the hla transport's tpiu path silently
+  does nothing) + the cfg-provided `stm32h7x.swo` object (`stm32h7x.tpiu`
+  is the parallel port — rejects uart). traceclk = c_ck 400 MHz, not HCLK:
+  too-slow guesses give ratio-garbled bytes, too-fast gives silence.
+
+```bash
+openocd -f interface/stlink-dap.cfg -c 'adapter serial <uid>' -f target/stm32h7x.cfg -c init \
+ -c "mww 0x5C001004 0x00700000" \
+ -c 'set m [read_memory 0x58020400 32 1]; mww 0x58020400 [expr {([lindex $m 0] & ~0xC0) | 0x80}]' \
+ -c 'set a [read_memory 0x58020420 32 1]; mww 0x58020420 [expr {[lindex $a 0] & ~0xF000}]' \
+ -c "stm32h7x.swo configure -protocol uart -traceclk 400000000 -pin-freq 2000000 -output /tmp/swo.bin" \
+ -c "stm32h7x.swo enable" -c "itm ports on" \
+ -c "sleep 3000" -c "stm32h7x.swo disable" -c shutdown   # then decode /tmp/swo.bin
+```
+
+## Vector catch + fault autopsy — catch the crash, not the wedge
+
+A wedge that is really a fault (HardFault loop, lockup) autopsies best AT
+the faulting instruction. Two hardware-proven gotchas: **FPB/DWT comparators
+survive reflash and dead sessions** — a stale one fires as a phantom SIGTRAP
+at an unrelated line of NEW firmware — and J-Link's reset strategy manages
+vector-catch bits: scrub first, arm AFTER reset:
+
+```gdb
+# scrub: FP_COMP0..5 = 0xE0002008..201C, DWT_FUNCTIONn = 0xE0001028 + n*0x10
+set *(unsigned*)0xE0002008 = 0
+# ... (repeat per comparator; count = the GDB section's budget reads)
+# arm (after monitor reset; tool-agnostic — works via JLinkExe w4 too):
+set *(unsigned*)0xE000EDFC |= (1<<10)|(1<<9)|(1<<8)|(1<<7)|(1<<6)|(1<<5)|(1<<4)
+# = VC_HARDERR|INTERR|BUSERR|STATERR|CHKERR|NOCPERR|MMERR; bit0 VC_CORERESET halts at reset
+```
+
+OpenOCD native: `cortex_m vector_catch hard_err bus_err state_err chk_err mm_err`.
+It halts at exception ENTRY (pc = handler, LR = EXC_RETURN 0xFFFFFFFx); decode:
+
+```gdb
+p/x *(unsigned*)0xE000ED28   # CFSR — low byte MemManage, byte1 BusFault, top half UsageFault
+p/x *(unsigned*)0xE000ED2C   # HFSR — bit30 FORCED = an escalated lower-priority fault
+p/x *(unsigned*)0xE000ED38   # BFAR — faulting address (valid if CFSR bit15 BFARVALID)
+x/8wx $msp                   # stacked frame: r0 r1 r2 r3 r12 lr pc xpsr — pc = culprit
+```
+
+`addr2line -e <elf> <stacked pc>` names the line (verified: CFSR 0x8200,
+BFAR = the bad address, stacked pc = the faulting ldr). Loads fault
+precisely; stores usually IMPRECISERR (BFAR invalid, pc late). ARMv6-M has no
+CFSR/BFAR, only VC_HARDERR|VC_CORERESET — stacked frame alone. Still a halt
+(host URB timeouts apply); clear DEMCR (`&= ~0x7F0`) before handing back;
+RISC-V: breakpoint the trap handler; mcause/mepc/mtval are the CFSR/BFAR analogs.
+
+## RAM ring-buffer trace
+
+The zero-print instrument (cracked the musb babble): a small event ring in the
+dcd/hcd, dumped over GDB after the failure. Single-writer (ISR) — no locking:
+
+```c
+typedef struct { uint16_t ev; uint16_t a; uint32_t b; } dbg_ev_t;
+#define DBG_N 512                          // power of two
+static volatile dbg_ev_t dbg_ring[DBG_N];  // volatile REQUIRED: -Os dead-store-
+static volatile uint32_t dbg_wr;           // eliminates a write-only static array
+static inline void DBG_EV(uint16_t ev, uint16_t a, uint32_t b) {
+  uint32_t i = dbg_wr++;
+  dbg_ring[i & (DBG_N - 1)] = (dbg_ev_t){ ev, a, b };
+}
+// call sites: DBG_EV(__LINE__, ep_addr, count);  — __LINE__ as event id
+```
+
+After building, `nm` the ELF for `dbg_ring`/`dbg_wr` — if they're missing the
+compiler deleted your instrument and the run will "reproduce" with an empty ring.
+
+Order is the index; if durations matter add a `uint32_t t = DWT->CYCCNT` field
+(enable once: `CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk; DWT->CTRL |= 1;`
+RISC-V: read `mcycle`). Let the failure happen, halt, then:
+
+```gdb
+p dbg_wr                          # total events; oldest slot = dbg_wr & (DBG_N-1) once wrapped
+p dbg_ring
+dump binary memory /tmp/ring.bin &dbg_ring[0] &dbg_ring[512]
+```
 
 ## TU_LOG capture
 
@@ -92,7 +239,7 @@ but ONLY what fits the drain model: the default SEGGER mode (NO_BLOCK_SKIP)
 **drops** writes once the ring fills with no reader, so an undrained target
 holds the first KB after boot, not the wedge tail. There is no overwrite mode
 in stock SEGGER RTT (only SKIP/TRIM/BLOCK): post-mortem RTT is evidence only
-if a live drain was running — otherwise instrument with the RAM ring below.
+if a live drain was running — otherwise instrument with the RAM ring above.
 Use `JLinkGDBServer -RTTTelnetPort 19021` + `JLinkRTTClient` for the drain
 (proven; note the server briefly halts the core on connect). `JLinkRTTLogger`
 fails to find the control block on some parts (LPC4088) even when it exists
@@ -169,108 +316,6 @@ While halted the device answers **nothing**: host control transfers time out
 in ~5 s and the OS may reset/re-enumerate — after `continue`, the bus traffic
 shows recovery, not the original bug. Prefer one halt for a post-mortem dump
 over stepping through live USB traffic.
-
-## Vector catch + fault autopsy — catch the crash, not the wedge
-
-A wedge that is really a fault (HardFault loop, lockup) autopsies best AT
-the faulting instruction. Two hardware-proven gotchas: **FPB/DWT comparators
-survive reflash and dead sessions** — a stale one fires as a phantom SIGTRAP
-at an unrelated line of NEW firmware — and J-Link's reset strategy manages
-vector-catch bits: scrub first, arm AFTER reset:
-
-```gdb
-# scrub: FP_COMP0..5 = 0xE0002008..201C, DWT_FUNCTIONn = 0xE0001028 + n*0x10
-set *(unsigned*)0xE0002008 = 0
-# ... (repeat per comparator; count from the budget reads above)
-# arm (after monitor reset; tool-agnostic — works via JLinkExe w4 too):
-set *(unsigned*)0xE000EDFC |= (1<<10)|(1<<9)|(1<<8)|(1<<7)|(1<<6)|(1<<5)|(1<<4)
-# = VC_HARDERR|INTERR|BUSERR|STATERR|CHKERR|NOCPERR|MMERR; bit0 VC_CORERESET halts at reset
-```
-
-OpenOCD native: `cortex_m vector_catch hard_err bus_err state_err chk_err mm_err`.
-It halts at exception ENTRY (pc = handler, LR = EXC_RETURN 0xFFFFFFFx); decode:
-
-```gdb
-p/x *(unsigned*)0xE000ED28   # CFSR — low byte MemManage, byte1 BusFault, top half UsageFault
-p/x *(unsigned*)0xE000ED2C   # HFSR — bit30 FORCED = an escalated lower-priority fault
-p/x *(unsigned*)0xE000ED38   # BFAR — faulting address (valid if CFSR bit15 BFARVALID)
-x/8wx $msp                   # stacked frame: r0 r1 r2 r3 r12 lr pc xpsr — pc = culprit
-```
-
-`addr2line -e <elf> <stacked pc>` names the line (verified: CFSR 0x8200,
-BFAR = the bad address, stacked pc = the faulting ldr). Loads fault
-precisely; stores usually IMPRECISERR (BFAR invalid, pc late). ARMv6-M has no
-CFSR/BFAR, only VC_HARDERR|VC_CORERESET — stacked frame alone. Still a halt
-(host URB timeouts apply); clear DEMCR (`&= ~0x7F0`) before handing back;
-RISC-V: breakpoint the trap handler; mcause/mepc/mtval are the CFSR/BFAR analogs.
-
-## RAM ring-buffer trace
-
-The zero-print instrument (cracked the musb babble): a small event ring in the
-dcd/hcd, dumped over GDB after the failure. Single-writer (ISR) — no locking:
-
-```c
-typedef struct { uint16_t ev; uint16_t a; uint32_t b; } dbg_ev_t;
-#define DBG_N 512                          // power of two
-static volatile dbg_ev_t dbg_ring[DBG_N];  // volatile REQUIRED: -Os dead-store-
-static volatile uint32_t dbg_wr;           // eliminates a write-only static array
-static inline void DBG_EV(uint16_t ev, uint16_t a, uint32_t b) {
-  uint32_t i = dbg_wr++;
-  dbg_ring[i & (DBG_N - 1)] = (dbg_ev_t){ ev, a, b };
-}
-// call sites: DBG_EV(__LINE__, ep_addr, count);  — __LINE__ as event id
-```
-
-After building, `nm` the ELF for `dbg_ring`/`dbg_wr` — if they're missing the
-compiler deleted your instrument and the run will "reproduce" with an empty ring.
-
-Order is the index; if durations matter add a `uint32_t t = DWT->CYCCNT` field
-(enable once: `CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk; DWT->CTRL |= 1;`
-RISC-V: read `mcycle`). Let the failure happen, halt, then:
-
-```gdb
-p dbg_wr                          # total events; oldest slot = dbg_wr & (DBG_N-1) once wrapped
-p dbg_ring
-dump binary memory /tmp/ring.bin &dbg_ring[0] &dbg_ring[512]
-```
-
-## PC-sampling (J-Link) — find where the core spins, without halting
-
-`DWT_PCSR` (0xE000101C) returns the current PC on every read, target running
-(Cortex-M3+; optional on M0+, reads 0 if absent; 0xFFFFFFFF = core halted or
-WFI-asleep — `mem32 E000EDF0, 1`, DHCSR bit 17 S_HALT, tells which). One
-probe serves one client: quit JLinkExe before starting JLinkGDBServer on the
-same probe. Nailed the rusb2 FRDY wedge:
-
-```bash
-for i in $(seq 300); do echo 'mem32 E000101C, 1'; done \
-  | JLinkExe -device $JLINK_DEVICE -SelectEmuBySN <uid> -if swd -speed 4000 -autoconnect 1 -nogui 1 \
-  | awk '/E000101C = /{print $3}' | sort | uniq -c | sort -rn | head
-arm-none-eabi-addr2line -e <firmware.elf> -f -a 0x<hot-pc> ...   # PCs → functions
-```
-
-OpenOCD variant: repeat `mdw 0xE000101C` over telnet :4444. The histogram's
-top entries are the spin site; a flat histogram = core is servicing normally.
-
-### SWO — hardware-timed trace on one pin (J-Link; verified on F407)
-
-If SWO (TRACESWO) is wired, DWT emits packets with ZERO code change:
-**exception trace** (DWT_CTRL bit16 — every IRQ enter/exit, timestamped) and
-**hardware PC sampling** (bit12), better histograms than DWT_PCSR polling.
-SWOViewer tools decode only ITM *stimulus* (TinyUSB emits none) — capture
-raw:
-
-```bash
-# JLinkExe -CommandFile:
-w4 E0001000, 0x00011401      # EXCTRCENA|PCSAMPLENA|SYNCTAP|CYCCNTENA
-SWOStart 4000000             # explicit speed — autodetect fails headless
-Sleep 3000
-SWORead                      # hex: 0x17+4B LE = PC sample, 0x0E+2B = IRQ enter/exit
-```
-
-Verified: 680 KB in 3 s (flash-range PC samples + SysTick enter/exit).
-SWORead stuck at 0 = SWO pin not wired (many boards route only SWDIO/SWCLK).
-Restore DWT_CTRL when done.
 
 ## Dual-side capture — the default for enumeration/transfer bugs
 
