@@ -153,7 +153,7 @@ static stdio_driver_t stdio_rtt = {
   .in_chars = stdio_rtt_read
 };
 
-void stdio_rtt_init(void) {
+static void stdio_rtt_init(void) {
   stdio_set_driver_enabled(&stdio_rtt, true);
 }
 #endif
