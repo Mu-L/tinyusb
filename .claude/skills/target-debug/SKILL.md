@@ -252,9 +252,10 @@ reads don't halt the target.
 ## GDB — state autopsy and watchpoints
 
 Connect/load recipes per probe family (J-Link, OpenOCD for ST-Link /
-CMSIS-DAP / WCH-Link) are in CLAUDE.md "GDB Debugging". Scripted sessions: JLinkGDBServer `-singlerun` (exits with the
-connection) — back-to-back relaunches race the probe handle and hang. Release builds keep DWARF (`MinSizeRel`), so `p`/struct access works
-on HIL firmware.
+CMSIS-DAP / WCH-Link) are in CLAUDE.md "GDB Debugging"; script sessions with
+JLinkGDBServer `-singlerun` — the server exits with the connection, and
+back-to-back relaunches race the probe handle and hang. Release builds keep
+DWARF (`MinSizeRel`), so `p`/struct access works on HIL firmware.
 
 **Autopsy of a wedged board: attach and halt ONLY** — skip CLAUDE.md's
 `monitor reset halt` + `load` (those are for fresh starts; a reset destroys

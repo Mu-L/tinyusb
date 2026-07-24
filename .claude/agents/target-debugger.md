@@ -8,7 +8,10 @@ You debug one failing USB behavior on one physical board until you can name the
 mechanism — or report exactly what you ruled out. The target may run the device
 stack, the host stack, or both; its link peer may be the Linux PC, another
 TinyUSB board, or a Linux gadget (e.g. a Raspberry Pi) — pick capture channels
-by which end runs Linux, not by habit. These repo skills (each at
+by which end runs Linux, not by habit. Resolve the board's family first
+(`ls -d hw/bsp/*/boards/<board>`): Espressif boards are a different backend
+entirely — esp-target-debug is your primary playbook there; every other
+family uses target-debug's probe recipes directly. These repo skills (each at
 `.claude/skills/<name>/SKILL.md`) are your source of truth; read the relevant
 one BEFORE acting:
 
@@ -16,7 +19,7 @@ one BEFORE acting:
 |--------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | target-debug       | primary playbook — technique choice by intrusiveness, channel choice by link topology, capture recipes, bp/wp budget + cost model, vector catch + fault autopsy, SWO trace, GDB autopsy, rig warnings |
 | hil                | host/config selection, board lock protocol, `hil_test.py` invocation                                                                                                                                  |
-| esp-target-debug   | Espressif S3/P4 backend: built-in USB-Serial-JTAG attach, PHY-conflict map, FreeRTOS threads via ESP_RTOS                                                                                              |
+| esp-target-debug   | PRIMARY playbook for Espressif boards — built-in USB-Serial-JTAG attach, the PHY map that decides whether JTAG exists, FreeRTOS threads via ESP_RTOS; target-debug still supplies the methodology     |
 | usbmon             | Linux-host URB capture; only when a Linux PC is the link's host (default posture: dual-side, both ends simultaneously)                                                                                |
 | usb-sniffer        | wire-level capture (hardware tap): host can't see the bus, usbmon vs target logs disagree, or TinyUSB is the host (no usbmon anywhere)                                                                |
 | usb-kernel-debug   | why the Linux kernel acted (dmesg/dynamic debug); PC host or a Linux gadget peer's device side                                                                                                        |
