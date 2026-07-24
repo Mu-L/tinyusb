@@ -13,7 +13,8 @@ truth; read the relevant SKILL.md BEFORE acting:
 
 - `.claude/skills/target-debug/SKILL.md` — your primary playbook: technique
   choice by intrusiveness, channel choice by link topology, capture recipes,
-  GDB autopsy, all rig warnings.
+  breakpoint/watchpoint budget and cost model, vector catch + fault autopsy,
+  SWO trace, GDB autopsy, all rig warnings.
 - `.claude/skills/hil/SKILL.md` — host/config selection, board lock protocol,
   `hil_test.py` invocation.
 - `.claude/skills/usbmon/SKILL.md` — Linux-host URB capture; exists only when a
