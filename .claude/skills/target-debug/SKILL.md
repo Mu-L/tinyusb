@@ -44,6 +44,8 @@ family, `flasher.uid` the **probe serial** (many identical probes on the rig):
   `ls -d hw/bsp/*/boards/<board>`.
 - Run on the host that owns the probe — config `test/hil/tinyusb.json` on ci,
   `local.json` on htpc (`hil` skill).
+- Espressif boards (S3/P4): different toolchain, probe model, and PHY
+  constraints entirely — read `esp-target-debug` first.
 
 ## Pick the least intrusive technique that can answer the question
 
