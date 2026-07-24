@@ -60,7 +60,9 @@ that IS a finding (timing-sensitive): move down in intrusiveness, not up.
 ## TU_LOG capture
 
 Build with `LOG=2` (`LOG=3` adds per-transfer noise and much more timing skew).
-`LOGGER=rtt` routes it over the debug probe (J-Link only) — no UART wiring:
+`LOGGER=rtt` routes it over the debug probe — no UART wiring. SEGGER's host
+tools need a J-Link, but OpenOCD serves the same RTT buffer on ST-Link /
+CMSIS-DAP / WCH-Link boards:
 
 ```bash
 # RTT: JLinkGDBServer from CLAUDE.md "GDB Debugging" + -RTTTelnetPort, then:
@@ -68,6 +70,18 @@ timeout 20s JLinkRTTClient > /tmp/rtt.log        # non-interactive capture
 # UART (board's debug serial, if wired):
 stty -F /dev/ttyACM<N> 115200 raw && timeout 20s cat /dev/ttyACM<N> | tee /tmp/uart.log
 ```
+
+```bash
+# OpenOCD RTT (any probe OpenOCD drives) — in telnet :4444 (or -c equivalents):
+rtt setup 0x20000000 0x8000 "SEGGER RTT"   # search range = RAM ORIGIN + LENGTH (from the .ld / map file)
+rtt start                                  # after firmware booted; rerun after each reflash
+rtt server start 19021 0
+# then:  timeout 20s nc localhost 19021 > /tmp/rtt.log
+```
+
+OpenOCD polls the buffer: bursty logs can drop lines a J-Link would keep —
+prefer J-Link where both exist; the drain-model warning below applies
+unchanged.
 
 An RTT-built firmware that has since wedged still holds a log tail in RAM —
 but ONLY what fits the drain model: the default SEGGER mode (NO_BLOCK_SKIP)
@@ -85,8 +99,11 @@ reads don't halt the target.
 ## GDB — state autopsy and watchpoints
 
 Connect/load recipes per probe family (J-Link, OpenOCD for ST-Link /
-CMSIS-DAP / WCH-Link) are in CLAUDE.md "GDB Debugging". Release builds keep
-DWARF (`MinSizeRel`), so `p`/struct access works on HIL firmware.
+CMSIS-DAP / WCH-Link) are in CLAUDE.md "GDB Debugging". For scripted/batch
+sessions add `-singlerun` to JLinkGDBServer — the server exits with the
+connection; back-to-back server relaunches race the probe handle and hang at
+startup. Release builds keep DWARF (`MinSizeRel`), so `p`/struct access works
+on HIL firmware.
 
 **Autopsy of a wedged board: attach and halt ONLY** — skip CLAUDE.md's
 `monitor reset halt` + `load` (those are for fresh starts; a reset destroys
@@ -103,6 +120,50 @@ x/32wx <USB peripheral base>     # raw EP/FIFO regs; base = the macro the dcd us
 watch  xfer_status[2][1].total_len    # HW watchpoint (Cortex-M: ~4); dwc2 names shown
 break dcd_int_handler            # works, but see warning below
 ```
+
+**Hardware budget — read it off the chip, not from memory** (verified: F407/M4
+= 6 bp + 4 wp, rp2040/M0+ = 4 + 2; M7 typically 8/4):
+
+```gdb
+p ((*(unsigned*)0xE0002000)>>4) & 0xF   # FPB NUM_CODE = hw breakpoints (M7 adds bits[14:12])
+p (*(unsigned*)0xE0001000)>>28          # DWT_CTRL NUMCOMP = watchpoint comparators
+```
+
+- `hbreak`/`thbreak` force a hardware breakpoint (code in flash can't take a
+  software break unless the probe does flash breakpoints — J-Link does,
+  OpenOCD needs `bp <addr> 2 hw`); `tbreak` = one-shot.
+- `watch -l <expr>` watches the *address* the expression evaluates to once —
+  cheap and what you almost always want; `rwatch`/`awatch` trap reads/any
+  access (hardware-only — they error rather than fall back). OpenOCD (telnet
+  :4444) adds a data-VALUE match GDB cannot express: `wp <addr> 4 w <value>
+  [mask]` — fires only when the written value matches (e.g. catch who writes
+  0 into a busy flag, ignoring writes of 1).
+- **Demand the word "Hardware" in the confirmation.** `watch` silently falls
+  back to a SOFTWARE watchpoint when no DWT comparator fits (expression too
+  wide/complex, budget exhausted): GDB then single-steps the whole program —
+  hundreds of times slower, certain USB death. `Watchpoint 2:` without
+  "Hardware" = delete it; narrowing the expression (`watch -l`, cast to a
+  4-byte int) is the real fix.
+- Conditional breaks/watches (`break dcd_edpt_xfer if ep_addr==0x81`) are
+  evaluated by GDB on the HOST with our stubs — neither JLinkGDBServer nor
+  OpenOCD supports target-side agent expressions on Cortex-M — so every hit
+  is a halt+resume (~ms) whether the condition matches or not: fine
+  post-wedge or on cold paths, wrong under live USB traffic.
+- `commands <bpnum> ... end` auto-runs GDB commands at each hit (start with
+  `silent`, end with `continue` for hands-free evidence collection) — same
+  halt-per-hit cost.
+- `dprintf <loc>,"fmt",args` = printf without recompiling. Stay on the
+  default `dprintf-style gdb` (host prints): the `call` style runs the
+  target's own printf mid-halt and `agent` needs stub support — neither is
+  viable on these probes. Same cost model as conditional breaks; for
+  ISR-rate events use the RAM ring buffer instead.
+- Stepping while the USB ISR fires between every step is chaos: OpenOCD
+  `cortex_m maskisr steponly` masks interrupts during single-steps only.
+  The bus keeps running either way — the host may still reset a device that
+  stops responding mid-step.
+- While halted you can poke state to test a hypothesis (`set var
+  _usbd_dev.ep_status[2][1].busy = 0`) — but that invalidates the snapshot
+  as post-mortem evidence; dump first, poke after.
 
 While halted the device answers **nothing**: host control transfers time out
 in ~5 s and the OS may reset/re-enumerate — after `continue`, the bus traffic
@@ -175,6 +236,17 @@ lay device events between anchors in host-URB order. Logging the SOF/frame
 number on the target gives a shared clock when you need finer alignment.
 When host and target evidence disagree, or the host sees nothing at all, add
 the wire itself: `usb-sniffer` skill (hardware tap, PID-level).
+
+## Manuals
+
+- J-Link / J-Trace User Guide (UM08001): <https://kb.segger.com/UM08001_J-Link_/_J-Trace_User_Guide> — flash breakpoints, RTT, SWO, monitor mode, Commander commands.
+- OpenOCD User's Guide: <https://openocd.org/doc/html/index.html> — `rtt`, `bp`/`wp`, `cortex_m vector_catch` / `maskisr`, `itm`/`tpiu`.
+- "Debugging with GDB" (the official manual; §5.1 covers break/watch/dprintf):
+  calibre library first (`read-doc` skill) — use the **Tenth Edition (GDB 18)**
+  copy, not the 2002 Ninth-Edition txt also present; fallback
+  `curl -sL -o /tmp/gdb.pdf https://sourceware.org/gdb/current/onlinedocs/gdb.pdf`
+  (the HTML mirror blocks fetchers; the PDF works). The installed
+  `arm-none-eabi-gdb`'s `help <cmd>` is authoritative for what this rig runs.
 
 ## Warnings
 
