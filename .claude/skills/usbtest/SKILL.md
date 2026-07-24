@@ -1,6 +1,6 @@
 ---
 name: usbtest
-description: Use when running, debugging, or porting the Linux usbtest/testusb battery (examples/device/usbtest, cafe:4010) — device "did not bind", SET_CONFIGURATION fails, a case fails with errno 110/32/5/71, toggle-clear/halt/unlink/iso failures, iso packets dropped, or a new MCU/DCD needs the full 30/30 sign-off.
+description: Use when running, debugging, or porting the Linux usbtest/testusb battery (examples/device/usbtest, cafe:4010) — device "did not bind", SET_CONFIGURATION fails, a case fails with errno 110/32/5/71, toggle-clear/halt/unlink/iso failures, iso packets dropped, or a new MCU/DCD needs the full 30/30 sign-off. Needs a Linux PC as the link's host driving TinyUSB in device role — it exercises the DCD, not the TinyUSB host stack.
 ---
 
 # usbtest — porting & debugging the Linux kernel USB battery
@@ -80,12 +80,12 @@ python3 test/hil/usbtest.py --serial <uid> --keep-binding --tests 29 # one case
 
 ## Debug ladder (escalate in order)
 
-| errno | Meaning |
-|---|---|
-| 110 | timeout — endpoint NAKing forever / device wedged |
-| 32 | EPIPE — unexpected STALL |
-| 5 | EIO — iso packet errors (check `dmesg`: "N errors out of M") |
-| 71 | EPROTO — device answered wrong / too slow (after HC retries) |
+| errno | Meaning                                                      |
+|-------|--------------------------------------------------------------|
+| 110   | timeout — endpoint NAKing forever / device wedged            |
+| 32    | EPIPE — unexpected STALL                                     |
+| 5     | EIO — iso packet errors (check `dmesg`: "N errors out of M") |
+| 71    | EPROTO — device answered wrong / too slow (after HC retries) |
 
 1. `usbtest.py` per-case output + its captured `dmesg` (`TEST n` markers bracket each case).
 2. **usbmon** (`usbmon` skill): URB-level ground truth. **It cannot show data toggles or NAKs** —

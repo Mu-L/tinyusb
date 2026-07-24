@@ -7,11 +7,11 @@ description: Use when running TinyUSB Hardware-in-the-Loop (HIL) tests on physic
 
 Run TinyUSB HIL tests on real boards. **Run `hostname` first** — it tells you which host you are on, which determines the default config and whether remote mode is possible.
 
-| Host | Local config | Remote (SSH → ci.lan)? |
-|------|--------------|------------------------|
-| `htpc` (dev PC) | `test/hil/local.json` | yes (large pool, `test/hil/tinyusb.json`) |
-| `ci` (the rig) | `test/hil/tinyusb.json` (large pool) | no — can't SSH to htpc, and boards are already local |
-| `hifiphile` (external rig) | `test/hil/hfp.json` | no outbound SSH to htpc/ci; SSH-reachable FROM both |
+| Host                       | Local config                         | Remote (SSH → ci.lan)?                               |
+|----------------------------|--------------------------------------|------------------------------------------------------|
+| `htpc` (dev PC)            | `test/hil/local.json`                | yes (large pool, `test/hil/tinyusb.json`)            |
+| `ci` (the rig)             | `test/hil/tinyusb.json` (large pool) | no — can't SSH to htpc, and boards are already local |
+| `hifiphile` (external rig) | `test/hil/hfp.json`                  | no outbound SSH to htpc/ci; SSH-reachable FROM both  |
 
 Default to **local**. Use **remote** only when on `htpc` and the user says `remote`/`ci.lan`. Never attempt remote on `ci`.
 

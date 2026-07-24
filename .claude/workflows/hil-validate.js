@@ -52,7 +52,7 @@ if (!args.force) {
 }
 
 const wedged = results.filter(r => r.wedged).map(r => r.board)
-if (wedged.length) log(`WEDGED boards needing usb-recover: ${wedged.join(', ')}`)
+if (wedged.length) log(`WEDGED boards needing usb-kernel-recover: ${wedged.join(', ')}`)
 // Workers cannot prompt the user — surface still-locked boards for the main
 // session to ask: force (re-invoke with force: true), wait, or accept.
 const locked = args.force ? [] : results.filter(r => !r.pass && r.detail.startsWith('board locked')).map(r => r.board)
