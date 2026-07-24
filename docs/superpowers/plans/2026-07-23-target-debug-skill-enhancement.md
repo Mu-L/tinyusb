@@ -313,8 +313,8 @@ board back; RISC-V ports have no DEMCR — use a breakpoint on the trap handler.
 Create the fault build (NOT committed):
 
 ```bash
-python3 test/hil/board_lock.py hold $OB --reason "skill-enhance verify: vector catch"
-cd examples/device/cdc_msc
+python3 test/hil/board_lock.py hold $JB --reason "skill-enhance verify: vector catch"
+cd examples/device/cdc_msc   # executed on $JB (stm32f407disco, ARMv7-M) via JLinkExe — see commit evidence
 # temporary patch — revert after: fault 5 s after boot
 python3 - <<'EOF'
 import pathlib
@@ -327,12 +327,13 @@ s = s.replace('led_blinking_task();', 'led_blinking_task(); _fault_after_5s();',
 p.write_text(s)
 EOF
 grep -n '_fault_after_5s' src/main.c   # expect 3 hits: definition + call + (none in decl block)
-cmake -B build-fault -DBOARD=$OB -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel && cmake --build build-fault
+cmake -B build-fault -DBOARD=$JB -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel && cmake --build build-fault
 ```
 (If `app_led_task`/`board_millis` anchors differ in the current `main.c`, place the same 3-line helper on whatever per-loop task function exists — the fault line `*(volatile uint32_t*)0xCF000000u = 0;` is the payload.)
 Flash `build-fault`, then:
 
 ```bash
+# executed variant: DEMCR armed + autopsy via JLinkExe command file on $JB (see commit c1d2d305f evidence); OpenOCD-native form:
 openocd $OPENOCD_OPTION -c init -c 'cortex_m vector_catch hard_err bus_err' &
 timeout 60 arm-none-eabi-gdb -batch -ex 'target remote :3333' -ex 'monitor reset run' \
   -ex 'shell sleep 8' -ex 'interrupt' \
@@ -343,7 +344,7 @@ Expected: halted in the fault path, CFSR BusFault bits set, **BFAR = 0xCF000000*
 
 - [x] **Step 3: Clean up hardware state**
 
-`git checkout -- src/main.c`, delete `build-fault/`, clear DEMCR bits (`set *(unsigned*)0xE000EDFC &= ~0x7F1` via a final gdb attach or power-cycle note), reflash pristine cdc_msc, `board_lock.py release $OB`.
+`git checkout -- src/main.c`, delete `build-fault/`, clear DEMCR bits (`set *(unsigned*)0xE000EDFC &= ~0x7F1` via a final gdb attach or power-cycle note), reflash pristine cdc_msc, `board_lock.py release $JB`.
 
 - [x] **Step 4: Commit**
 

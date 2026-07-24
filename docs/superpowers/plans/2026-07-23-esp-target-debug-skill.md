@@ -41,7 +41,7 @@ lsusb | grep -i cafe   # TinyUSB VID on the DUT port
 - [x] **Step 3: Attach openocd over USB-SJ while the device runs**
 
 ```bash
-openocd -f board/esp32p4-builtin.cfg -c 'adapter serial 6055F9F98715' &   # gdb :3333
+openocd -f board/esp32p4-builtin.cfg -c 'adapter serial 60:55:F9:F9:87:15' &   # gdb :3333 — USB-SJ iSerial = MAC with colons
 riscv32-esp-elf-gdb -batch -ex 'target extended-remote :3333' -ex 'monitor halt' \
   -ex bt -ex 'monitor resume' <p4 elf>
 ```
@@ -53,7 +53,7 @@ Expected: backtrace with symbols; after resume the CDC device still answers (re-
 
 - [x] **Step 1: Breakpoint/watchpoint budget** — RISC-V trigger count: in gdb `monitor riscv info` or set watchpoints until rejection; verify a hardware watchpoint on a TinyUSB variable (e.g. `watch -l` on a usbd counter) reports and hits.
 - [x] **Step 2: FreeRTOS threads** — `info threads` after halt; expect ESP-IDF tasks incl. the USB task; note whether it works at attach or needs run→stop (mirror the ARM finding).
-- [x] **Step 3: Console during traffic** — capture the USB-SJ console tty (the 303a:1001 CDC function) for a few seconds while DUT traffic runs; expect ESP-IDF log lines. Record the /dev node mapping by serial.
+- [x] **Step 3: Console during traffic** — OUTCOME: stock builds route the console to UART0 (the CP2102 flasher tty — boot log captured there); the USB-SJ CDC carries no log without sdkconfig `ESP_CONSOLE_USB_SERIAL_JTAG`, which stays (untested) in the skill.
 - [x] **Step 4: Reflash pristine, release P4 lock.** Evidence appended to `/tmp/esp_evidence.txt`.
 
 ### Task 3: P4 apptrace spike — GATED (spec gate 5)

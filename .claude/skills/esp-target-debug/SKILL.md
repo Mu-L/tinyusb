@@ -53,10 +53,14 @@ openocd -c 'set ESP_RTOS FreeRTOS' -f board/esp32p4-builtin.cfg \
         -c 'adapter serial <MAC-with-colons>' &        # S3: board/esp32s3-builtin.cfg
 riscv32-esp-elf-gdb -batch -ex 'target extended-remote :3333' \
   -ex 'tbreak tud_task_ext' -ex continue -ex bt -ex 'info threads' -ex detach <elf>
+# S3 is Xtensa: use xtensa-esp32s3-elf-gdb with the same arguments
 ```
 
-- `adapter serial` = the chip MAC **with colons** (`lsusb -v -d 303a:1001`, or
-  `/dev/serial/by-id/usb-Espressif_USB_JTAG_serial_debug_unit_<MAC>-if00`).
+- `adapter serial` = the chip MAC **with colons** — the USB-SJ device's
+  iSerial exactly as `lsusb -v -d 303a:1001` or
+  `/dev/serial/by-id/usb-Espressif_USB_JTAG_serial_debug_unit_<MAC>-if00`
+  prints it. (The `tinyusb.json` esptool uids are the CP2102N *flasher*
+  serials — a different port; never pass those to openocd.)
 - `set ESP_RTOS FreeRTOS` must precede the board cfg: with it, `info threads`
   lists every task with name/state/CPU (verified: usbd Running @CPU0, IDLE1
   @CPU1, ...); without it, one bare "Remote target".

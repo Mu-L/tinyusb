@@ -172,6 +172,8 @@ p/x *(unsigned*)0xE000ED28   # CFSR — low byte MemManage, byte1 BusFault, top 
 p/x *(unsigned*)0xE000ED2C   # HFSR — bit30 FORCED = an escalated lower-priority fault
 p/x *(unsigned*)0xE000ED38   # BFAR — faulting address (valid if CFSR bit15 BFARVALID)
 x/8wx $msp                   # stacked frame: r0 r1 r2 r3 r12 lr pc xpsr — pc = culprit
+# frame is on PSP when EXC_RETURN bit2 is set (LR = 0xFFFFFFFD — FreeRTOS
+# tasks run on PSP): then x/8wx $psp instead. LR 0xFFFFFFF1/E9 = MSP.
 ```
 
 `addr2line -e <elf> <stacked pc>` names the line (verified: CFSR 0x8200,
